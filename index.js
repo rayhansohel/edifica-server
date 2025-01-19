@@ -70,6 +70,18 @@ async function run() {
       }
     });
 
+    // Fetch all apartments (for the image gallery)
+    app.get("/api/all-apartments", async (req, res) => {
+      try {
+        // Fetch all apartments without filters or pagination
+        const apartments = await apartmentCollection.find().toArray();
+
+        res.json(apartments);
+      } catch (err) {
+        console.error("Error fetching all apartments:", err);
+        res.status(500).json({ message: "Error fetching all apartments." });
+      }
+    });
   } catch (error) {
     console.error("Error connecting to MongoDB", error);
   }
