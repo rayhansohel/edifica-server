@@ -1,18 +1,17 @@
+// Required modules
 const express = require("express");
-const cors = require("cors");
-const dotenv = require("dotenv");
-const { MongoClient, ServerApiVersion } = require("mongodb");
-
-// Load environment variables
-dotenv.config();
-
 const app = express();
+const cors = require("cors");
+require("dotenv").config();
+
+const port = process.env.PORT || 5000;
 
 // Middlewares
 app.use(cors());
 app.use(express.json());
 
 // MongoDB connection
+const { MongoClient, ServerApiVersion } = require("mongodb");
 const uri = `mongodb+srv://${process.env.MONGO_USER}:${process.env.MONGO_PASS}@cluster0.62t6y.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 const client = new MongoClient(uri, {
@@ -26,77 +25,66 @@ const client = new MongoClient(uri, {
 // Initialize Database
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     console.log("Connected to MongoDB!");
 
-    // MongoDB database and collection
-    const db = client.db("edifica");
-    const apartmentCollection = db.collection("apartments");
+    // MongoDB database and collections
+    const apartmentCollection = client.db("edifica").collection("apartments");
+    const agreementCollection = client.db("edifica").collection("agreements");
+    const userCollection = client.db("edifica").collection("users");
 
-    // Routes
-
-    // Health Check Route
-    app.get("/", (req, res) => {
-      res.send("Server is running...");
+    // Fetch all apartments
+    app.get("/all-apartments", async (req, res) => {
+      const apartments = await apartmentCollection.find().toArray();
+      res.json(apartments);
     });
 
-    // Fetch apartments with filters (rent range and pagination)
-    app.get("/api/apartments", async (req, res) => {
-      const { minRent, maxRent, page = 1, limit = 6 } = req.query;
+    // Fetch apartments with filters
+    app.get("/apartments", async (req, res) => {
+      const { minRent, maxRent, page = 1, limit = 8 } = req.query;
 
-      try {
-        // Construct query for filtering apartments by rent range
-        const query = {
-          rent: { $gte: parseInt(minRent), $lte: parseInt(maxRent) },
-        };
+      const query = {
+        rent: { $gte: parseInt(minRent), $lte: parseInt(maxRent) },
+      };
+      const apartments = await apartmentCollection
+        .find()
+        .skip((page - 1) * limit)
+        .limit(parseInt(limit))
+        .toArray();
+      const total = await apartmentCollection.countDocuments(query);
+      res.json({ apartments, total });
+    });
 
-        // Fetch apartments from MongoDB with pagination
-        const apartmentsCursor = apartmentCollection.find(query);
-        const apartments = await apartmentsCursor
-          .skip((page - 1) * limit)
-          .limit(parseInt(limit))
-          .toArray();
-
-        const total = await apartmentCollection.countDocuments(query);
-
-        // Return the paginated apartments data
-        res.json({
-          apartments: apartments,
-          total: total,
+    // Create an agreement (one per user)
+    app.post("/agreement", async (req, res) => {
+        const { userEmail } = req.body;
+        // Check if user has already applied for apartment
+        const existingAgreement = await agreementCollection.findOne({ 
+          userEmail 
         });
-      } catch (err) {
-        console.error("Error fetching apartments:", err);
-        res.status(500).json({ message: "Error fetching apartments." });
-      }
+    
+        if (existingAgreement) {
+          return res.status(400).json({ message: "You have already applied for an apartment" });
+        }
+    
+        // Insert new agreement if no existing record found
+        const result = await agreementCollection.insertOne(req.body);
+        res.send(result);
+      
     });
-
-    // Fetch all apartments (for the image gallery)
-    app.get("/api/all-apartments", async (req, res) => {
-      try {
-        // Fetch all apartments without filters or pagination
-        const apartments = await apartmentCollection.find().toArray();
-
-        res.json(apartments);
-      } catch (err) {
-        console.error("Error fetching all apartments:", err);
-        res.status(500).json({ message: "Error fetching all apartments." });
-      }
-    });
-  } catch (error) {
-    console.error("Error connecting to MongoDB", error);
+    
+    
+  } finally {
+    // await client.close();
   }
 }
+run().catch(console.dir);
 
 // Start Server
-(async () => {
-  try {
-    await run(); // Correct function name here
-    const PORT = process.env.PORT || 5000; 
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
-    });
-  } catch (error) {
-    console.error("Failed to start server:", error);
-    process.exit(1);
-  }
-})();
+app.get("/", (req, res) => {
+  res.send("Server is Running");
+});
+
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
