@@ -39,41 +39,53 @@ async function run() {
       res.json(apartments);
     });
 
-    // Fetch apartments with filters
+    // Fetch apartments with filters (rent range and pagination)
     app.get("/apartments", async (req, res) => {
       const { minRent, maxRent, page = 1, limit = 8 } = req.query;
 
       const query = {
         rent: { $gte: parseInt(minRent), $lte: parseInt(maxRent) },
       };
+
       const apartments = await apartmentCollection
-        .find()
-        .skip((page - 1) * limit)
+        .find(query)
+        .skip((parseInt(page) - 1) * parseInt(limit))
         .limit(parseInt(limit))
         .toArray();
+
       const total = await apartmentCollection.countDocuments(query);
+
       res.json({ apartments, total });
     });
 
     // Create an agreement (one per user)
     app.post("/agreement", async (req, res) => {
-        const { userEmail } = req.body;
-        // Check if user has already applied for apartment
-        const existingAgreement = await agreementCollection.findOne({ 
-          userEmail 
-        });
-    
-        if (existingAgreement) {
-          return res.status(400).json({ message: "You have already applied for an apartment" });
-        }
-    
-        // Insert new agreement if no existing record found
-        const result = await agreementCollection.insertOne(req.body);
-        res.send(result);
-      
+      const { userEmail } = req.body;
+
+      // Check if the user has already applied for an apartment
+      const existingAgreement = await agreementCollection.findOne({ userEmail });
+
+      if (existingAgreement) {
+        return res.status(400).json({ message: "You have already applied for an apartment" });
+      }
+
+      // Insert new agreement if no existing record found
+      const result = await agreementCollection.insertOne(req.body);
+      res.json(result);
     });
-    
-    
+
+    // Fetch agreement details by user email
+    app.get("/agreement/:email", async (req, res) => {
+      const { email } = req.params;
+      const agreement = await agreementCollection.findOne({ userEmail: email });
+
+      if (!agreement) {
+        return res.status(404).json({ message: "No agreement found for this user" });
+      }
+
+      res.json(agreement);
+    });
+
   } finally {
     // await client.close();
   }
