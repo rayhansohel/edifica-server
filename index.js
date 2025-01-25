@@ -33,6 +33,22 @@ async function run() {
     const agreementCollection = client.db("edifica").collection("agreements");
     const userCollection = client.db("edifica").collection("users");
 
+    // Fetch all members
+    app.get("/users", async (req, res) => {
+      const users = await userCollection.find().toArray();
+      res.json(users);
+    });
+
+    // Update user role to "user"
+    app.patch("/users/:email", async (req, res) => {
+      const { email } = req.params;
+      const updateDoc = {
+        $set: { role: "user" },
+      };
+      const result = await userCollection.updateOne({ email }, updateDoc);
+      res.json(result);
+    });
+
     // Fetch all apartments
     app.get("/all-apartments", async (req, res) => {
       const apartments = await apartmentCollection.find().toArray();
@@ -86,19 +102,17 @@ async function run() {
       res.json(agreement);
     });
 
-    //User store in databas 
+    // Store user in the database
     app.post("/users", async (req, res) => {
       const user = req.body;
-      const query = {email: user.email}
+      const query = { email: user.email };
       const existingUser = await userCollection.findOne(query);
-      if (existingUser){
-        return res.send ({massage: 'User already exist', incertedId:null})
+      if (existingUser) {
+        return res.send({ message: "User already exists", insertedId: null });
       }
       const result = await userCollection.insertOne(user);
       res.send(result);
     });
-  
-
   } finally {
     // await client.close();
   }
