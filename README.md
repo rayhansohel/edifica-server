@@ -21,4 +21,3 @@ The server side of **Edifica** is designed to handle API requests for users, mem
 - **JWT**: Secure token-based authentication.
 - **CORS**: Cross-Origin Resource Sharing.
 - **Dotenv**: For environment variable management.
-- **Mongoose**: MongoDB ORM.
