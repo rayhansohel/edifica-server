@@ -35,6 +35,7 @@ async function run() {
     const announcementCollection = client
       .db("edifica")
       .collection("announcements");
+    const couponCollection = client.db("edifica").collection("coupons");
 
     // JWT-related API
     // Send JWT Token
@@ -245,7 +246,6 @@ async function run() {
       }
     });
 
-
     //Announcement Related API
     // Create a new announcement
     app.post("/announcements", verifyToken, verifyAdmin, async (req, res) => {
@@ -277,6 +277,57 @@ async function run() {
         res.json(result);
       }
     );
+
+    // Coupon Related API
+    // Add New Coupon
+    app.post("/coupons", verifyToken, verifyAdmin, async (req, res) => {
+      const { code, discount, description } = req.body;
+      if (!code || !discount || !description) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+      const coupon = { code, discount, description, available: true };
+      const result = await couponCollection.insertOne(coupon);
+      res.send(result);
+    });
+
+    //Fetch all Coupon
+    app.get("/coupons", verifyToken, async (req, res) => {
+      const coupons = await couponCollection.find().toArray();
+      res.send(coupons);
+    });
+    
+    //Update coupon Aviability status
+    app.patch("/coupons/:id", verifyToken, verifyAdmin, async (req, res) => {
+      const { id } = req.params;
+      const { available } = req.body;
+      const result = await couponCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { available } }
+      );
+      res.send(result);
+    });
+
+    //Delete coupon
+    app.delete("/coupons/:id", verifyToken, verifyAdmin, async (req, res) => {
+      const { id } = req.params;
+      const result = await couponCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+      res.send(result);
+    });
+
+    app.post("/coupons/validate", verifyToken, async (req, res) => {
+      const { code } = req.body;
+      const coupon = await couponCollection.findOne({ code, available: true });
+      if (!coupon) {
+        return res
+          .status(404)
+          .json({ message: "Coupon not found or inactive" });
+      }
+      res.send(coupon);
+    });
+
+
   } finally {
     // await client.close();
   }
