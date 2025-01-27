@@ -37,6 +37,7 @@ async function run() {
       .collection("announcements");
 
     // JWT-related API
+    // Send JWT Token
     app.post("/jwt", async (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
@@ -70,6 +71,7 @@ async function run() {
       next();
     };
 
+    //User Related API
     // Store new user in the database
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -118,6 +120,7 @@ async function run() {
       res.json({ message: "User role updated successfully" });
     });
 
+    //Apartments Related API
     // Fetch all apartments
     app.get("/all-apartments", async (req, res) => {
       const apartments = await apartmentCollection.find().toArray();
@@ -139,6 +142,7 @@ async function run() {
       res.json({ apartments, total });
     });
 
+    //Agreement Related API
     // Create an agreement (one per user)
     app.post("/agreement", async (req, res) => {
       const { userEmail } = req.body;
@@ -154,7 +158,7 @@ async function run() {
       res.json(result);
     });
 
-    // Fetch agreement details by user email
+    // Fetch agreement details by user email for User Profile Dashboard
     app.get("/agreement/:email", async (req, res) => {
       const agreement = await agreementCollection.findOne({
         userEmail: req.params.email,
@@ -167,6 +171,82 @@ async function run() {
       res.json(agreement);
     });
 
+    // Fetch all agreements for Admin
+    app.get("/agreement", verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const agreements = await agreementCollection.find().toArray();
+        res.json(agreements);
+      } catch (error) {
+        res.status(500).json({ message: "Error fetching agreements", error });
+      }
+    });
+
+    // Update agreement status by Admin
+    app.patch("/agreement", verifyToken, verifyAdmin, async (req, res) => {
+      const { email } = req.query;
+      const updateFields = req.body;
+
+      try {
+        const result = await agreementCollection.updateOne(
+          { userEmail: email },
+          { $set: updateFields }
+        );
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ message: "Agreement not found" });
+        }
+        res.json({ message: "Agreement updated successfully" });
+      } catch (error) {
+        res.status(500).json({ message: "Error updating agreement", error });
+      }
+    });
+
+    // Change user role by Admin
+    app.patch("/users/role", verifyToken, verifyAdmin, async (req, res) => {
+      const { email } = req.query;
+      const { role } = req.body;
+
+      if (!role) {
+        return res.status(400).json({ message: "Role is required" });
+      }
+
+      try {
+        const result = await userCollection.updateOne(
+          { email },
+          { $set: { role } }
+        );
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ message: "User not found" });
+        }
+        res.json({ message: "User role updated successfully" });
+      } catch (error) {
+        res.status(500).json({ message: "Error updating user role", error });
+      }
+    });
+
+    // Delete an agreement by user email
+    app.delete("/agreement", verifyToken, verifyAdmin, async (req, res) => {
+      const email = req.query.email;
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      try {
+        const result = await agreementCollection.deleteOne({
+          userEmail: email,
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ message: "Agreement not found" });
+        }
+
+        res.json({ message: "Agreement deleted successfully" });
+      } catch (error) {
+        res.status(500).json({ message: "Error deleting agreement", error });
+      }
+    });
+
+
+    //Announcement Related API
     // Create a new announcement
     app.post("/announcements", verifyToken, verifyAdmin, async (req, res) => {
       const announcement = req.body;
