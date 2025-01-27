@@ -11,7 +11,7 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB connection
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = `mongodb+srv://${process.env.MONGO_USER}:${process.env.MONGO_PASS}@cluster0.62t6y.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 const client = new MongoClient(uri, {
@@ -29,25 +29,64 @@ async function run() {
     console.log("Connected to MongoDB!");
 
     // MongoDB database and collections
+    const userCollection = client.db("edifica").collection("users");
     const apartmentCollection = client.db("edifica").collection("apartments");
     const agreementCollection = client.db("edifica").collection("agreements");
-    const userCollection = client.db("edifica").collection("users");
 
-    // Fetch all members
+    // Fetch all user
     app.get("/users", async (req, res) => {
       const users = await userCollection.find().toArray();
       res.json(users);
     });
 
-    // Update user role to "user"
-    app.patch("/users/:email", async (req, res) => {
-      const { email } = req.params;
-      const updateDoc = {
-        $set: { role: "user" },
-      };
-      const result = await userCollection.updateOne({ email }, updateDoc);
-      res.json(result);
+    // Delete User
+    app.delete("/users/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await userCollection.deleteOne(query);
+      res.send(result);
     });
+
+    //Make User as an admin
+    app.patch("/users/admin/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          role: "admin",
+        },
+      };
+      const result = await userCollection.updateOne(filter, updatedDoc);
+      res.send(result);
+    });
+
+    // change user role
+    app.patch("/users/role/:id", async (req, res) => {
+      const id = req.params.id;
+      const { role } = req.body;
+    console.log(`${role}`)
+      if (!role) {
+        return res.status(400).json({ message: "Role is required" });
+      }
+    
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: { role },
+      };
+    
+      try {
+        const result = await userCollection.updateOne(filter, updatedDoc);
+        if (result.modifiedCount > 0) {
+          res.json({ message: "User role updated successfully" });
+        } else {
+          res.status(404).json({ message: "User not found or no changes made" });
+        }
+      } catch (error) {
+        console.error("Error updating user role:", error);
+        res.status(500).json({ message: "Failed to update user role" });
+      }
+    });
+    
 
     // Fetch all apartments
     app.get("/all-apartments", async (req, res) => {
@@ -79,10 +118,14 @@ async function run() {
       const { userEmail } = req.body;
 
       // Check if the user has already applied for an apartment
-      const existingAgreement = await agreementCollection.findOne({ userEmail });
+      const existingAgreement = await agreementCollection.findOne({
+        userEmail,
+      });
 
       if (existingAgreement) {
-        return res.status(400).json({ message: "You have already applied for an apartment" });
+        return res
+          .status(400)
+          .json({ message: "You have already applied for an apartment" });
       }
 
       // Insert new agreement if no existing record found
@@ -96,7 +139,9 @@ async function run() {
       const agreement = await agreementCollection.findOne({ userEmail: email });
 
       if (!agreement) {
-        return res.status(404).json({ message: "No agreement found for this user" });
+        return res
+          .status(404)
+          .json({ message: "No agreement found for this user" });
       }
 
       res.json(agreement);
