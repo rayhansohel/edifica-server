@@ -291,11 +291,11 @@ async function run() {
     });
 
     //Fetch all Coupon
-    app.get("/coupons", verifyToken, async (req, res) => {
+    app.get("/coupons", async (req, res) => {
       const coupons = await couponCollection.find().toArray();
       res.send(coupons);
     });
-    
+
     //Update coupon Aviability status
     app.patch("/coupons/:id", verifyToken, verifyAdmin, async (req, res) => {
       const { id } = req.params;
@@ -316,6 +316,7 @@ async function run() {
       res.send(result);
     });
 
+    //Check coupon validations
     app.post("/coupons/validate", verifyToken, async (req, res) => {
       const { code } = req.body;
       const coupon = await couponCollection.findOne({ code, available: true });
@@ -326,10 +327,7 @@ async function run() {
       }
       res.send(coupon);
     });
-
-
   } finally {
-    // await client.close();
   }
 }
 run().catch(console.dir);
