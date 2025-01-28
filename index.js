@@ -371,7 +371,7 @@ async function run() {
     });
 
     //Payment related API
-    // Process Payment
+    // Process payment and submit
     app.post("/payments/process", async (req, res) => {
       const {
         email,
