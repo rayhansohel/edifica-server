@@ -1,4 +1,3 @@
-// Required modules
 const express = require("express");
 const app = express();
 const cors = require("cors");
@@ -36,6 +35,7 @@ async function run() {
       .db("edifica")
       .collection("announcements");
     const couponCollection = client.db("edifica").collection("coupons");
+    const paymentCollection = client.db("edifica").collection("payments");
 
     // JWT-related API
     // Send JWT Token
@@ -84,7 +84,34 @@ async function run() {
       res.send(result);
     });
 
-    // Make User an admin
+    // Fetch all users
+    app.get("/users", async (req, res) => {
+      const users = await userCollection.find().toArray();
+      res.json(users);
+    });
+
+    // Fetch user by role
+    app.post("/users/role/:email", async (req, res) => {
+      const email = req.params.email;
+
+      // Check if the email parameter is provided
+      if (!email) {
+        return res.status(400).send({ message: "Email is required" });
+      }
+
+      // Fetch user by email
+      const user = await userCollection.findOne({ email });
+
+      // If no user is found with that email, send a 404
+      if (!user) {
+        return res.status(404).send({ message: "User not found" });
+      }
+
+      // Return the user's role
+      res.send(user?.role);
+    });
+
+    // Fetch User as admin
     app.get("/users/admin/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       if (email !== req.decoded.email) {
@@ -92,12 +119,6 @@ async function run() {
       }
       const user = await userCollection.findOne({ email });
       res.send({ admin: user?.role === "admin" });
-    });
-
-    // Fetch all users
-    app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
-      const users = await userCollection.find().toArray();
-      res.json(users);
     });
 
     // Delete a user
@@ -159,7 +180,7 @@ async function run() {
       res.json(result);
     });
 
-    // Fetch agreement details by user email for User Profile Dashboard
+    // Fetch agreement details by user email
     app.get("/agreement/:email", async (req, res) => {
       const agreement = await agreementCollection.findOne({
         userEmail: req.params.email,
@@ -316,17 +337,101 @@ async function run() {
       res.send(result);
     });
 
-    //Check coupon validations
-    app.post("/coupons/validate", verifyToken, async (req, res) => {
-      const { code } = req.body;
-      const coupon = await couponCollection.findOne({ code, available: true });
-      if (!coupon) {
-        return res
-          .status(404)
-          .json({ message: "Coupon not found or inactive" });
+    // Validate coupon code
+    app.post("/coupons/validate", async (req, res) => {
+      try {
+        const { couponCode } = req.body;
+        const coupon = await couponCollection.findOne({ code: couponCode });
+
+        if (!coupon) {
+          return res.json({
+            valid: false,
+            message: "Invalid coupon code",
+            discount: 0,
+          });
+        }
+
+        if (!coupon.available) {
+          return res.json({
+            valid: false,
+            message: "Coupon is no longer available",
+            discount: 0,
+          });
+        }
+        const discountPercentage = Number(coupon.discount) || 0;
+        res.json({ valid: true, discount: discountPercentage });
+      } catch (error) {
+        console.error("Coupon validation error:", error);
+        res.status(500).json({
+          valid: false,
+          message: "Internal server error",
+          discount: 0,
+        });
       }
-      res.send(coupon);
     });
+
+    //Payment related API
+    // Process Payment
+    app.post("/payments/process", async (req, res) => {
+      const {
+        email,
+        floor,
+        blockName,
+        apartmentNo,
+        rent,
+        discount,
+        finalAmount,
+        month,
+        year,
+        couponCode,
+      } = req.body;
+
+      try {
+        const payment = {
+          email,
+          floor,
+          blockName,
+          apartmentNo,
+          rent,
+          discount,
+          finalAmount,
+          month,
+          year,
+          couponCode,
+          paymentDate: new Date(),
+          status: "completed",
+        };
+
+        const result = await paymentCollection.insertOne(payment);
+        res.json({ success: true, paymentId: result.insertedId });
+      } catch (error) {
+        console.error("Payment processing error:", error);
+        res
+          .status(500)
+          .json({ success: false, message: "Payment processing failed" });
+      }
+    });
+
+
+     // Fetch payment details by user email
+     app.get("/payments/:email", async (req, res) => {
+      const email = req.params.email;
+
+      if (!email) {
+        return res.status(400).send({ message: "Email is required" });
+      }
+      try {
+        const payments = await paymentCollection.find({ email }).toArray();
+        if (payments.length === 0) {
+          return res.status(404).send({ message: "No payments found for this user" });
+        }
+        res.send(payments);
+      } catch (error) {
+        console.error("Error fetching payments:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+    
   } finally {
   }
 }
