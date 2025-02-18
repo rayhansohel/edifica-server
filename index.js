@@ -31,9 +31,7 @@ async function run() {
     const userCollection = client.db("edifica").collection("users");
     const apartmentCollection = client.db("edifica").collection("apartments");
     const agreementCollection = client.db("edifica").collection("agreements");
-    const announcementCollection = client
-      .db("edifica")
-      .collection("announcements");
+    const announcementCollection = client.db("edifica").collection("announcements");
     const couponCollection = client.db("edifica").collection("coupons");
     const paymentCollection = client.db("edifica").collection("payments");
 
@@ -149,6 +147,26 @@ async function run() {
       res.json(apartments);
     });
 
+    // Fetch recent apartments
+    app.get("/recent-apartments", async (req, res) => {
+      const apartments = await apartmentCollection.find().sort({ createdAt: -1 }).limit(6).toArray();
+      res.json(apartments);
+    });
+
+    // Update apartment status by availablity
+    app.patch("/apartment/:id", async (req, res) => {
+      const { id } = req.params;
+      const { availability } = req.body;
+      if (!availability) {
+        return res.status(400).json({ message: "Available Status required" });
+      }
+      const result = await userCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { availability } }
+      );
+      res.json({ message: "Available Status updated successfully" });
+    });
+
     // Fetch apartments with filters (rent range and pagination)
     app.get("/apartments", async (req, res) => {
       const { minRent, maxRent, page = 1, limit = 8 } = req.query;
@@ -206,16 +224,25 @@ async function run() {
     // Update agreement status by Admin
     app.patch("/agreement", verifyToken, verifyAdmin, async (req, res) => {
       const { email } = req.query;
-      const updateFields = req.body;
+      const { status, approvedBy } = req.body;
 
       try {
+        const updateFields = { status };
+
+        if (status === "done") {
+          updateFields.approvedAt = new Date().toISOString();
+          updateFields.approvedBy = approvedBy || "Unknown Admin";
+        }
+
         const result = await agreementCollection.updateOne(
           { userEmail: email },
           { $set: updateFields }
         );
+
         if (result.matchedCount === 0) {
           return res.status(404).json({ message: "Agreement not found" });
         }
+
         res.json({ message: "Agreement updated successfully" });
       } catch (error) {
         res.status(500).json({ message: "Error updating agreement", error });
@@ -412,9 +439,8 @@ async function run() {
       }
     });
 
-
-     // Fetch payment details by user email
-     app.get("/payments/:email", async (req, res) => {
+    // Fetch payment details by user email
+    app.get("/payments/:email", async (req, res) => {
       const email = req.params.email;
 
       if (!email) {
@@ -423,7 +449,9 @@ async function run() {
       try {
         const payments = await paymentCollection.find({ email }).toArray();
         if (payments.length === 0) {
-          return res.status(404).send({ message: "No payments found for this user" });
+          return res
+            .status(404)
+            .send({ message: "No payments found for this user" });
         }
         res.send(payments);
       } catch (error) {
@@ -431,7 +459,6 @@ async function run() {
         res.status(500).send({ message: "Internal server error" });
       }
     });
-    
   } finally {
   }
 }
