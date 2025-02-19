@@ -167,20 +167,28 @@ async function run() {
       res.json({ message: "Available Status updated successfully" });
     });
 
-    // Fetch apartments with filters (rent range and pagination)
+    // Fetch apartments with filters (rent range and pagination & Sort)
     app.get("/apartments", async (req, res) => {
-      const { minRent, maxRent, page = 1, limit = 8 } = req.query;
+      const { minRent, maxRent, page = 1, limit = 12, sort = "asc" } = req.query;
       const query = {
         rent: { $gte: parseInt(minRent), $lte: parseInt(maxRent) },
       };
-      const apartments = await apartmentCollection
-        .find(query)
-        .skip((parseInt(page) - 1) * parseInt(limit))
-        .limit(parseInt(limit))
-        .toArray();
-      const total = await apartmentCollection.countDocuments(query);
-      res.json({ apartments, total });
+      const sortOrder = sort === "asc" ? 1 : -1;
+      try {
+        const apartments = await apartmentCollection
+          .find(query)
+          .sort({ rent: sortOrder })
+          .skip((parseInt(page) - 1) * parseInt(limit))
+          .limit(parseInt(limit))
+          .toArray();
+  
+        const total = await apartmentCollection.countDocuments(query);
+        res.json({ apartments, total });
+      } catch (error) {
+        res.status(500).json({ error: "An error occurred while fetching apartments." });
+      }
     });
+    
 
     //Agreement Related API
     // Create an agreement (one per user)
