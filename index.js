@@ -31,9 +31,12 @@ async function run() {
     const userCollection = client.db("edifica").collection("users");
     const apartmentCollection = client.db("edifica").collection("apartments");
     const agreementCollection = client.db("edifica").collection("agreements");
-    const announcementCollection = client.db("edifica").collection("announcements");
+    const announcementCollection = client
+      .db("edifica")
+      .collection("announcements");
     const couponCollection = client.db("edifica").collection("coupons");
     const paymentCollection = client.db("edifica").collection("payments");
+    const newsletterCollection = client.db("edifica").collection("newsletterSubscribers");
 
     // JWT-related API
     // Send JWT Token
@@ -149,7 +152,11 @@ async function run() {
 
     // Fetch recent apartments
     app.get("/recent-apartments", async (req, res) => {
-      const apartments = await apartmentCollection.find().sort({ createdAt: -1 }).limit(6).toArray();
+      const apartments = await apartmentCollection
+        .find()
+        .sort({ createdAt: -1 })
+        .limit(4)
+        .toArray();
       res.json(apartments);
     });
 
@@ -169,7 +176,13 @@ async function run() {
 
     // Fetch apartments with filters (rent range and pagination & Sort)
     app.get("/apartments", async (req, res) => {
-      const { minRent, maxRent, page = 1, limit = 12, sort = "asc" } = req.query;
+      const {
+        minRent,
+        maxRent,
+        page = 1,
+        limit = 12,
+        sort = "asc",
+      } = req.query;
       const query = {
         rent: { $gte: parseInt(minRent), $lte: parseInt(maxRent) },
       };
@@ -181,14 +194,16 @@ async function run() {
           .skip((parseInt(page) - 1) * parseInt(limit))
           .limit(parseInt(limit))
           .toArray();
-  
+
         const total = await apartmentCollection.countDocuments(query);
+
         res.json({ apartments, total });
       } catch (error) {
-        res.status(500).json({ error: "An error occurred while fetching apartments." });
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching apartments." });
       }
     });
-    
 
     //Agreement Related API
     // Create an agreement (one per user)
@@ -467,6 +482,34 @@ async function run() {
         res.status(500).send({ message: "Internal server error" });
       }
     });
+
+    //Subscribe to newsletter
+    app.post("/subscribe", async (req, res) => {
+      try {
+        const { email } = req.body;
+
+        if (!email) {
+          return res.status(400).json({ message: "Email is required" });
+        }
+
+        const existingSubscriber = await newsletterCollection.findOne({
+          email,
+        });
+        if (existingSubscriber) {
+          return res.status(400).json({ message: "Already subscribed" });
+        }
+        await newsletterCollection.insertOne({
+          email,
+          subscribedAt: new Date(),
+        });
+
+        res.status(201).json({ message: "Subscribed successfully!" });
+      } catch (error) {
+        console.error("Error subscribing to newsletter:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
   } finally {
   }
 }
